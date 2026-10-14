@@ -1,0 +1,30 @@
+# SPL queries I used for this lab
+
+# 1. Show every failed login
+index=* EventCode=4625
+
+# 2. Group failures by source IP and logon type, only show busy ones
+index=* EventCode=4625
+| stats count, values(Account_Name) as Targeted_Users by Source_Network_Address, Logon_Type
+| where count > 5
+| sort -count
+
+# 3. Same as above but include the first and last attempt time so you
+#    can see the duration of the burst
+index=* EventCode=4625
+| stats count, values(Account_Name) as Targeted_Users, min(_time) as First, max(_time) as Last by Source_Network_Address
+| where count > 5
+| eval Duration = Last - First
+| sort -count
+
+# 4. The one that matters most - failed logins followed by a success
+#    from the same source. If this returns anything, you have a real
+#    problem.
+index=* EventCode=4625 OR EventCode=4624 Logon_Type=10
+| stats count(eval(EventCode=4625)) as Failed, count(eval(EventCode=4624)) as Success by Source_Network_Address, Account_Name
+| where Failed > 5 AND Success > 0
+
+# 5. Everything for a specific user, in time order
+index=* EventCode=4625 Account_Name=soclab
+| table _time, Source_Network_Address, Account_Name, Logon_Type, Failure_Reason
+| sort -_time
